@@ -19,7 +19,6 @@
 #   http://www.gnu.org/licenses/gpl.html
 
 import urllib
-import time
 from pickle import dumps, loads
 import re
 import sys
@@ -73,6 +72,27 @@ def load_cookies_from_lwp(filename):
     dic = loads(open(cookiepath).read())
     return dic
 
+def unquoteUni(text):
+
+    try:
+        import urllib.parse
+        return urllib.parse.unquote(text, encoding=self.charset)
+    except ImportError:
+        _hexdig = '0123456789ABCDEFabcdef'
+        _hextochr = dict((a+b, chr(int(a+b,16))) for a in _hexdig for b in _hexdig)
+        if isinstance(text, unicode):
+            text = text.encode('utf-8')
+        res = text.split('%')
+        for i in xrange(1, len(res)):
+            item = res[i]
+            try:
+                res[i] = _hextochr[item[:2]] + item[2:]
+            except KeyError:
+                res[i] = '%' + item
+            except UnicodeDecodeError:
+                res[i] = unichr(int(item[:2], 16)) + item[2:]
+        return "".join(res)
+
 headers  = {
         'User-Agent' : 'Opera/9.80 (X11; Linux i686; U; ru) Presto/2.7.62 Version/11.00',
         'Accept'     :' text/html, application/xml, application/xhtml+xml, image/png, image/jpeg, image/gif, image/x-xbitmap, */*',
@@ -100,7 +120,6 @@ def GET(url, referer, post_params = None):
             req = requests.get(url, headers=headers, cookies=load_cookies_from_lwp(cookiepath))
         else:
             req = requests.get(url, headers=headers)
-            #xbmc.log(req.text)
     req.encoding = 'utf-8'
     return req.text
 
@@ -118,11 +137,8 @@ def check_login():
         if http == None: return False
         userPanel = ""
 
-        time_start = time.time()
         if "b-header__user-panel" in http:
             userPanel = "found"
-        time_elapsed = time.time() - time_start
-        xbmc.log("TIME ELAPSED: " + str(time_elapsed))
 
         if userPanel == "":
             if os.path.isfile(cookiepath):
@@ -455,75 +471,75 @@ def readcategory(params):
                     xbmcplugin.addDirectoryItem(h, uri, li, True)
 
         for item in items:
-            title = None
-            cover = None
-            href = None
+                        title = None
+                        cover = None
+                        href = None
 
-            img = item.find('img')
-            link = item.find('a', 'subject-link')
-            if img != None:
-                cover = img['src']
-                title = img['alt']
-                href = httpSiteUrl + link['href']
+                        img = item.find('img')
+                        link = item.find('a', 'subject-link')
+                        if img != None:
+                                cover = img['src']
+                                title = img['alt']
+                                href = httpSiteUrl + link['href']
 
-            if title != None:
-                plot = ''
-                if showUpdateInfo:
-                    additionalInfo = ''
-                    numItem = item.find('b', 'num')
-                    if numItem != None:
-                        additionalInfo = " / " + numItem.string.strip() + " "
-                    dateInfo = item.find('b', 'date')
-                    if dateInfo != None:
-                        additionalInfo += dateInfo.string.strip()
-                    title += additionalInfo
-                else:
-                    plot = []
-                    details = item.find('div', 'text').contents
-                    for detail in details:
-                        try:
-                            plot.append(detail)
-                        except:
-                            pass
-                    plot = htmlEntitiesDecode("\n".join(plot))
-                titleText = htmlEntitiesDecode(title)
-                li = xbmcgui.ListItem(titleText, iconImage = getThumbnailImage(cover), thumbnailImage = getPosterImage(cover))
-                if plot != '':
-                    li.setInfo(type=params['section'], infoLabels={'title': titleText, 'plot': plot})
-                li.setProperty('IsPlayable', 'false')
+                        if title != None:
+                                plot = ''
+                                if showUpdateInfo:
+                                        additionalInfo = ''
+                                        numItem = item.find('b', 'num')
+                                        if numItem != None:
+                                                additionalInfo = " / " + numItem.string.strip() + " "
+                                        dateInfo = item.find('b', 'date')
+                                        if dateInfo != None:
+                                                additionalInfo += dateInfo.string.strip()
+                                        title += additionalInfo
+                                else:
+                                        plot = []
+                                        details = item.find('div', 'text').contents
+                                        for detail in details:
+                                                try:
+                                                        plot.append(detail.encode('utf-8'))
+                                                except:
+                                                        pass
+                                        plot = htmlEntitiesDecode("\n".join(plot))
+                                titleText = htmlEntitiesDecode(title)
+                                li = xbmcgui.ListItem(titleText, iconImage = getThumbnailImage(cover), thumbnailImage = getPosterImage(cover))
+                                if plot != '':
+                                        li.setInfo(type=params['section'], infoLabels={'title': titleText, 'plot': plot})
+                                li.setProperty('IsPlayable', 'false')
 
-                id = str(link['href'].split('/')[-1])
-                li.addContextMenuItems([
-                        (
-                                __language__( 50001 ), "XBMC.RunPlugin(%s)" % construct_request({
-                                        'mode': 'addto',
-                                        'section': 'favorites',
-                                        'id': id
+                                id = str(link['href'].split('/')[-1])
+                                li.addContextMenuItems([
+                                        (
+                                                __language__( 50001 ), "XBMC.RunPlugin(%s)" % construct_request({
+                                                        'mode': 'addto',
+                                                        'section': 'favorites',
+                                                        'id': id
+                                                })
+                                        ),
+                                        (
+                                                __language__( 50002 ), "XBMC.RunPlugin(%s)" % construct_request({
+                                                        'mode': 'addto',
+                                                        'section': 'playlist',
+                                                        'id': id
+                                                })
+                                        )
+                                ])
+
+                                isMusic = 'no'
+                                if params['section'] == 'audio':
+                                        isMusic = 'yes'
+
+                                uri = construct_request({
+                                        'href': href,
+                                        'referer': categoryUrl,
+                                        'mode': 'readdir',
+                                        'cover': cover,
+                                        'folder': 0,
+                                        'isMusic': isMusic
                                 })
-                        ),
-                        (
-                                __language__( 50002 ), "XBMC.RunPlugin(%s)" % construct_request({
-                                        'mode': 'addto',
-                                        'section': 'playlist',
-                                        'id': id
-                                })
-                        )
-                ])
 
-                isMusic = 'no'
-                if params['section'] == 'audio':
-                    isMusic = 'yes'
-
-                uri = construct_request({
-                        'href': href,
-                        'referer': categoryUrl,
-                        'mode': 'readdir',
-                        'cover': cover,
-                        'folder': 0,
-                        'isMusic': isMusic
-                })
-
-                xbmcplugin.addDirectoryItem(h, uri, li, True)
+                                xbmcplugin.addDirectoryItem(h, uri, li, True)
 
     nextPageLink = beautifulSoup.find('a', 'next-link')
     if nextPageLink != None:
