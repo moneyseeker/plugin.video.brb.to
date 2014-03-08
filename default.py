@@ -741,7 +741,7 @@ def render_search_results(params):
             link = item.find('a')
 
             if link != None:
-                title = str(link['title'])
+                title = str(link['title'].encode('utf-8'))
                 href = httpSiteUrl + link['href']
                 cover = item.find('img')['src']
 
